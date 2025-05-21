@@ -1,12 +1,5 @@
 # Extension Bolt ZZZ: Dynamic Commitments
 
-Authors:
-  * Keagan McClelland <keagan@lightning.engineering>
-  * Olaoluwa Osuntokun <roasbeef@lightning.engineering>
-  * Eugene Siegel <eugene@lightning.engineering>
-
-Created: TODO
-
 # Table of Contents
 
 TODO
