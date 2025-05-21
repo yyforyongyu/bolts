@@ -65,37 +65,37 @@ using other messages defined in the protocol. However, after accounting for the
 channel parameters that can be changed using existing mechanisms, there remains
 a list of parameters which are unchangeable. We list these below:
 
-- dust_limit_satoshis
-- max_htlc_value_in_flight_msat
-- htlc_minimum_msat
-- channel_reserve_satoshis
-- to_self_delay
-- max_accepted_htlcs
-- funding_pubkey
-- revocation_basepoint
-- payment_basepoint
-- delayed_payment_basepoint
-- htlc_basepoint
-- first_per_commitment_point
-- channel_flags
-- upfront_shutdown
-- channel_type
+- `dust_limit_satoshis`
+- `max_htlc_value_in_flight_msat`
+- `channel_reserve_satoshis`
+- `htlc_minimum_msat`
+- `to_self_delay`
+- `max_accepted_htlcs`
+- `funding_pubkey`
+- `revocation_basepoint`
+- `payment_basepoint`
+- `delayed_payment_basepoint`
+- `htlc_basepoint`
+- `first_per_commitment_point`
+- `channel_flags`
+- `upfront_shutdown`
+- `channel_type`
 
 After some analysis during the development of this proposal, we determined that
 the basepoint values don't make sense to rotate. There is no obvious value in
 doing so and it carries additional administrative costs to rotate them. Finally,
-changing the upfront_shutdown script over the lifetime of the channel is
+changing the `upfront_shutdown` script over the lifetime of the channel is
 self-defeating and so we exclude it as well. The list of channel parameters
 remaining after we filter out these values is thus:
 
-- dust_limit_satoshis
-- max_htlc_value_in_flight_msat
-- htlc_minimum_msat
-- channel_reserve_satoshis
-- to_self_delay
-- max_accepted_htlcs
-- funding_pubkey
-- channel_type
+- `dust_limit_satoshis`
+- `max_htlc_value_in_flight_msat`
+- `channel_reserve_satoshis`
+- `htlc_minimum_msat`
+- `to_self_delay`
+- `max_accepted_htlcs`
+- `funding_pubkey`
+- `channel_type`
 
 The design presented here is intended to allow for arbitrary changes to these
 values that currently have no facilities for change in any other way.
@@ -128,7 +128,7 @@ to the channel state machine.
 ## Proposal Phase
 
 As a prerequisite to the proposal phase of a Dynamic Commitment negotiation, the
-channel must be in a [quiesced](https://github.com/lightning/bolts/pull/869)
+channel must be in a [quiesced](https://github.com/lightning/bolts/blob/master/02-peer-protocol.md#channel-quiescence)
 state.
 
 ### Node Roles
@@ -341,7 +341,7 @@ The receiving node:
     - MUST send an `error` and fail the channel
   - MUST forget its last sent `chan_param_propose` parameters.
   - if the `update_rejections` is a zero value
-    - SHOULD NOT re-attempt another dynamic commitment negotation for the
+    - SHOULD NOT re-attempt another dynamic commitment negotiation for the
       remaining lifecycle of the connection
   - if the `update_rejections` is a non-zero value:
     - MAY re-attempt another dynamic commitment negotiation
@@ -395,7 +395,7 @@ The receiving node:
 
 This message simplifies the process of resolving issues with retransmission.
 This message captures all of the necessary information to resolve honest
-discrepencies in channel state. With this message the effects of the Dynamic
+discrepancies in channel state. With this message the effects of the Dynamic
 Commitment negotiation can be reapplied without retransmitting the negotiation
 messages themselves.
 

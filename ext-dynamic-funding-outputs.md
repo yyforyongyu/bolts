@@ -21,7 +21,7 @@ described in this document will enable channel peers to re-negotiate and update
 the `funding_pubkey` as well as certain conversions between `channel_type`s
 while avoiding UTXO churn therefore preserving the continuity of identity for
 the channel whose terms are being changed. This proposal depends on
-[Dynamic Commitments](/ext-dynamic-commitments.md).
+[Dynamic Commitments](./ext-dynamic-commitments.md).
 
 ## Motivation
 
@@ -30,9 +30,9 @@ to be changed after it has been opened, it leaves a few of them out because
 changing these parameters would require a funding output change.
 
 Notable in particular, is that one of the channel parameters we wish to
-renegotiate is the the `channel_type` itself. While certain `channel_type`
+renegotiate is the `channel_type` itself. While certain `channel_type`
 conversions are possible with the Dynamic Commitments proposal, one of them that
-isn't is converting to Simple Taproot Channels (STCs). With STCs, we have the
+is converting to Simple Taproot Channels (STCs). With STCs, we have the
 opportunity to take advantage of the cost savings and privacy capabilities
 afforded by the 2021 Taproot Soft Fork, with further aspirations to be able to
 deploy Point Time-Lock Contracts (PTLCs) to the Lightning Network. The sooner
@@ -110,7 +110,7 @@ ownership of the UTXO and its viability as a routing edge for payment senders.
 BOLT 7 details all of the specifics of this message and how it is computed but
 one of the notable aspects of this process is that the receivers of these gossip
 messages verify that the UTXO underwriting the channel must be a P2WSH output
-with a pre-defined script using the participants' public keys, specified in
+with a predefined script using the participants' public keys, specified in
 BOLT 3. This will present issues for us which will become clearer in the next
 section.
 
@@ -172,8 +172,7 @@ exchanging the necessary information to be able to apply those updates.
 ## Proposal Phase
 
 As a prerequisite to the proposal phase of a Dynamic Commitment negotiation, the
-channel must be in a [quiesced](https://github.com/lightning/bolts/pull/869)
-state.
+channel must be in a [quiesced](https://github.com/lightning/bolts/blob/master/02-peer-protocol.md#channel-quiescence) state.
 
 ### Node Roles
 
@@ -325,11 +324,11 @@ Commitments.
 A Funding Output Update is executed by exchanging signatures for a transaction
 that spends the original funding output into a new funding output.
   - NOTE FOR REVIEWERS: This transaction is currently symmetric which burdens
-  us with the constraint that a reanchoring step can only be done once over the
-  lifetime of the channel. If we want to be able to securely do this multiple
-  times, we must make kickoff transactions revocable, and therefore asymmetric,
-  and therefore must start issuing commitment signatures in pairs. See Appendix
-  for details.
+    us with the constraint that a reanchoring step can only be done once over the
+    lifetime of the channel. If we want to be able to securely do this multiple
+    times, we must make kickoff transactions revocable, and therefore asymmetric,
+    and therefore must start issuing commitment signatures in pairs. See Appendix
+    for details.
 
 To remain congruent with the Dynamic Commitments proposal, these extra
 signature messages should be exchanged exactly once per funding output change
@@ -425,10 +424,10 @@ from `chan_param_ack`:
 1. Initialize the commitment transaction version and locktime.
 2. Initialize the commitment transaction input.
 3. Calculate this kickoff transaction's fee via `kickoff_feerate_per_kw`*
-  `kickoff_transaction_weight`/1000, making sure to round down. Subtract this
-  value from the new funding output.
+    `kickoff_transaction_weight`/1000, making sure to round down. Subtract this
+    value from the new funding output.
 5. Subtract two times the fixed anchor size of 330 satoshis from the new funding
-  output.
+    output.
 6. Add a funding output with the new funding amount.
 7. Add an anchor output for each party.
 8. Sort the outputs into BIP 69+CLTV order.
@@ -455,22 +454,22 @@ The 48-bit commitment number is computed by `XOR` as described in BOLT#03.
 2. Initialize the commitment transaction input.
 3. Calculate which committed HTLCs need to be trimmed.
 4. Calculate the commitment transaction fee via
-  commitment feerate * `commitment_transaction_weight`/1000, making sure to
-  round down. Subtract this from the funder's output.
+    commitment feerate * `commitment_transaction_weight`/1000, making sure to
+    round down. Subtract this from the funder's output.
 5. Subtract four times the fixed anchor size of 330 satoshis from the funder's
-  output. Two of the anchors are from the commitment transaction and two are
-  from the kickoff transaction.
+    output. Two of the anchors are from the commitment transaction and two are
+    from the kickoff transaction.
 6. Subtract the matching kickoff transaction's fee from the funder's output.
 7. For every offered HTLC, if it is not trimmed, add an offered HTLC output.
 8. For every received HTLC, if it is not trimmed, add a received HTLC output.
 9. If the `to_local` output is greater or equal to the dust limit, add a
-  `to_local` output.
+    `to_local` output.
 10. If the `to_remote` output is greater or equal to the dust limit, add a
-  `to_remote` output.
+    `to_remote` output.
 11. If `to_local` exists or there are untrimmed HTLCs, add a `to_local_anchor`.
 12. If `to_remote` exists or there are untrimmed HTLCs, add a
-  `to_remote_anchor`. The `to_remote_anchor` uses the remote party's
-  `taproot_funding_key`.
+    `to_remote_anchor`. The `to_remote_anchor` uses the remote party's
+    `taproot_funding_key`.
 13. Sort the outputs into BIP 69+CLTV order.
 
 #### Issuing the `commitment_signed` message
@@ -515,7 +514,7 @@ The receiving node:
 ##### Rationale
 
 The `kickoff_sig` cannot be issued until the `commitment_signed` message has
-been received to prevent griefing by broadcasting a kickoff for which there is
+been received to prevent grieving by broadcasting a kickoff for which there is
 no exit. The `revoke_and_ack` for the last pre-dynamic commitment has to wait
 for the `kickoff_sig` because if the last commitment built off of the original
 funding output is revoked before the `kickoff_sig` has been received, then if
@@ -572,7 +571,7 @@ The receiving node:
     - MUST reject the `chan_param_propose` if the `initiator` cannot pay for the kickoff
       transaction fee and the anchor outputs.
     - MUST reject the `chan_param_propose` if, after calculating the amount of the new
-      funding output, the new commmitment transaction would not be able to pay
+      funding output, the new commitment transaction would not be able to pay
       for any outputs at the current commitment feerate.
   - MUST reject the `chan_param_propose` if `taproot_funding_key` is not a valid
     secp256k1 compressed public key.
@@ -617,7 +616,7 @@ The receiving node:
 ![Cannot display image](./dynamic-commits/kickoff%20pinning.png "Kickoff transaction pinned")
 
 Originally, Bitcoin Core's default mempool settings allowed an unconfirmed
-transaction to have up to 25 decendants in the mempool. Past this limit, any
+transaction to have up to 25 descendants in the mempool. Past this limit, any
 descendants would be rejected. This was used as a DoS mitigation in Bitcoin Core
 and affected the security of LN channels. Before the anchors commitment type was
 introduced, pinning in the LN was where a counterparty broadcasted the
@@ -651,10 +650,10 @@ pin the kickoff transaction by:
     transactions _AND_
   - spending from the new funding output using the new commitment transaction,
     "using up" the CPFP Carve-out slot designated for the honest party.
-_NOTE FOR REVIEWERS_: The semantics of CPFP carve-out are not entirely clear
-as to whether or not there is only _one_ CPFP-Carve-Out "slot" or if the only
-two requirements are the 40kWU limit and a single unconfirmed ancestor. If we
-have more than one "slot" available, this is no longer a concern.
+    _NOTE FOR REVIEWERS_: The semantics of CPFP carve-out are not entirely clear
+    as to whether or not there is only _one_ CPFP-Carve-Out "slot" or if the only
+    two requirements are the 40kWU limit and a single unconfirmed ancestor. If we
+    have more than one "slot" available, this is no longer a concern.
 
 Depending on fee conditions, it may not be possible for the honest party to get
 these transactions confirmed until the mempool clears up.
@@ -687,7 +686,7 @@ HTLC.
 The above proposal specifies a process wherein we can reanchor the funding
 output exactly once. This is because even if we revoke all commitment
 transactions built off of the first kickoff transaction, we still are vulnerable
-to griefing if we do not revoke the kickoff transaction itself. In this case
+to grieving if we do not revoke the kickoff transaction itself. In this case
 one party may choose to burn all funds in a channel by broadcasting the kickoff
 transaction when no unrevoked commitment transactions remain. To deal with this
 we can either only reanchor once, as proposed above, allowing us to guarantee we
