@@ -107,8 +107,7 @@ However, there are exceptions to this protocol flow. Changing the funding pubkey
 and in certain cases, changing the channel type requires a funding output
 conversion. This proposal does not cover how to safely accomplish a funding
 output conversion and so for the purposes of the remainder of this document, it
-is considered prohibited. NOTE: follow-on documents will elaborate on how to
-execute changes that require funding output conversions.
+is considered prohibited.
 
 # Specification
 
@@ -128,7 +127,8 @@ state.
 
 In every dynamic commitment negotiation, there are two roles: the `initiator`
 and the `responder`. It is necessary for both nodes to agree on which node is
-the `initiator` and which node is the `responder`.
+the `initiator` and which node is the `responder`, which is determined during
+the quiescence negotiation.
 
 ### Negotiation TLVs
 
@@ -242,10 +242,6 @@ The receiving node:
   - if the TLV parameters of the `dyn_propose` are NOT acceptable and the
     receiver refuses to execute those parameter changes:
     - MUST respond with `dyn_reject`.
-
-_NOTE FOR REVIEWERS_: These messages all interact with each other, so feedback
-is welcome for how to restructure this section so that the invariants it
-prescribes are found in the most intuitive place.
 
 ##### Rationale
 
@@ -438,12 +434,6 @@ constraints. A sketch is provided below:
         +-------+                               +-------+
 
 At this point the channel is no longer considered quiescent.
-
-_NOTE FOR REVIEWERS_: Should we require that the `responder` immediately issues
-a `commitment_signed` of its own? As far as I can tell this doesn't accomplish
-anything except in the case where the `initiator` requests a change to its
-`dust_limit` which would give it _immediate_ (as opposed to _eventual_) access
-to a commitment transaction that abided by the new limit.
 
 ## Appendix A: `dyn_ack` signature definition
 
