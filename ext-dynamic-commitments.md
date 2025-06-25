@@ -88,6 +88,7 @@ remaining after we filter out these values is thus:
 - `to_self_delay`
 - `max_accepted_htlcs`
 - `funding_pubkey`
+- `channel_flags`
 - `channel_type`
 
 The design presented here is intended to allow for arbitrary changes to these
@@ -200,9 +201,17 @@ and are common to all messages in the negotiation phase.
   data:
     * [`u16`:`senders_max_accepted_htlcs`]
 
-#### channel_type
+#### channel_flags
 
 - type: 10
+
+  data:
+
+  - [`byte`: `channel_flags`]
+
+#### channel_type
+
+- type: 12
   data:
     * [`...*byte`:`channel_type`]
 
@@ -247,9 +256,12 @@ sent by the `initiator`.
     1. type: 8 (`max_accepted_htlcs`)
     2. data:
         * [`u16`:`senders_max_accepted_htlcs`]
-    1. type: 10 (`channel_type`)
+    1. type: 10 (`channel_flags`)
     2. data:
-        * [`...*byte`:`channel_type`]
+         - [`byte`: `channel_flags`]
+    1. type: 12 (`channel_type`)
+    2. data:
+         * [`...*byte`:`channel_type`]
 
 ##### Requirements
 
