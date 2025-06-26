@@ -131,21 +131,19 @@ The overall flow is shown in the following diagram:
     |       |(Proposes new channel terms)         |       |
     |       |                                     |       |
     |       |<-(4)-------------------- dyn_ack ---|       |
-    |       |       (Agrees to terms w/ signature)|       |
+    |       |             (Agrees to terms w/ sig)|       |
     |       |                                     |       |
-    |       |--(5)--- dyn_commit ---------------->|       |
-    |   A   |(Bundles proposal and signature)     |   B   |
+    |       |--(5)--- dyn_commit_sig ------------>|       |
+    |   A   |(Bundles proposal and sig, signs B's |   B   |
+    |       |new commitment)                      |       |
     |       |                                     |       |
-    |       |--(6)--- commit_sig ---------------->|       |
-    |       |(Signs B's new commitment)           |       |
-    |       |                                     |       |
-    |       |<-(7)------------- revoke_and_ack ---|       |
+    |       |<-(6)------------- revoke_and_ack ---|       |
     |       |            (B revokes its old state)|       |
     |       |                                     |       |
-    |       |<-(8)----------------- commit_sig ---|       |
+    |       |<-(7)----------------- commit_sig ---|       |
     |       |           (Signs A's new commitment)|       |
     |       |                                     |       |
-    |       |--(9)--- revoke_and_ack ------------>|       |
+    |       |--(8)--- revoke_and_ack ------------>|       |
     |       |(A revokes its old state)            |       |
     |       |                                     |       |
     |       |  (Channel operates with new terms)  |       |
@@ -388,7 +386,7 @@ to an agreement on a proposal that will work. By sending back a zero value for
 commitment negotiation forward at all and further negotiation should not be
 attempted.
 
-#### `dyn_commit`
+#### `dyn_commit_sig`
 
 This message is sent after receiving a `dyn_ack` to unify the parameters
 and the signature into a single message.
@@ -396,6 +394,7 @@ and the signature into a single message.
 1. type: 117
 2. data:
    * [`32*byte`:`channel_id`]
+   * [`signature`: `commit_signature`]
    * [`signature`:`dyn_ack_signature`]
    * [`dyn_propose_tlvs`:`tlvs`]
 
@@ -403,20 +402,25 @@ and the signature into a single message.
 
 The sending node:
   - MUST set `channel_id` to a valid channel id that it has with a peer.
-  - MUST set `signature` to a valid signature that matches the
+  - MUST set `commit_signature` that signs the responder's next commitment.
+    Essentially this is a `commit_sig` with zero HTLCs.
+  - MUST set `dyn_ack_signature` to a valid signature that matches the
     `dyn_propose_tlvs` and the receiver's node identity private key.
     message.
-  - MUST NOT send `dyn_commit` with a signature that is not valid for the
+  - MUST NOT send `dyn_commit_sig` with a signature that is not valid for the
     next commitment number that the receiving node expects to receive.
-  - MAY send `dyn_commit` _even if_ the channel is NOT quiescent.
+  - MAY send `dyn_commit_sig` _even if_ the channel is NOT quiescent.
   - MUST proceed to the Execution Phase.
 
 The receiving node:
-  - MUST validate that the `signature` was previously signed by its own node
-    identity pubkey for the next commitment number it expects to receive for
-    the `channel_id` specified.
-  - MUST consider this message an "update" for the purposes of retransmission
-    as well as allowing enabling the receipt of a `commitment_signed` message.
+  - if `commit_signature` is not valid for its local commitment transaction OR
+    non-compliant with LOW-S-standard rule.
+    - MUST send a `warning` and close the connection, or send an `error` and
+      fail the channel.
+  - MUST validate that the `dyn_ack_signature` was previously signed by its own
+    node identity pubkey for the next commitment number it expects to receive
+    for the `channel_id` specified.
+  - MUST consider this message an "update" for the purposes of retransmission.
   - MUST proceed to the Execution Phase.
 
 ##### Rationale
@@ -427,6 +431,14 @@ discrepancies in channel state. With this message the effects of the Dynamic
 Commitment negotiation can be reapplied without retransmitting the negotiation
 messages themselves.
 
+When the channel is quiescent, there are no HTLCs to be signed. Therefore, the
+`commit_sig` is wrapped within `dyn_commit_sig`, appearing as a single
+`commit_signature`. This bundling eliminates the need for a separate
+`commit_sig` message, reducing communication rounds. It also prevents a
+potential race condition where the responder might receive `dyn_commit` and
+`commit_sig` almost simultaneously, which could cause issues if `dyn_commit`
+isn't processed first.
+
 ## Reestablish
 
 The channel reestablish that needs to include a Dynamic Commitment upgrade
@@ -435,10 +447,11 @@ identically.
 
 ### Requirements
 
-If a node has previously sent a `dyn_commit` message that contains a
+If a node has previously sent a `dyn_commit_sig` message that contains a
 signature bound to the commitment number that its channel peer specified in the
 `channel_reestablish` message:
-  - MUST retransmit `dyn_commit`
+
+  - MUST retransmit `dyn_commit_sig`
   - MUST NOT retransmit `dyn_propose`
   - MUST proceed to Execution Phase
 
@@ -448,7 +461,7 @@ During the reestablish process we explicitly specify the next commitment
 numbers we expect to receive. Since the new parameter changes are locked in
 by an exchange of `commitment_signed` messages, if our channel peer tells us
 that the next commit number it expects is the same one as the commit number
-bound in the signature in `dyn_commit` we need to reissue that commitment
+bound in the signature in `dyn_commit_sig` we need to reissue that commitment
 as well as all of the updates that commitment includes.
 
 As a side note, since we establish quiescence prior to Dynamic Commitment
@@ -466,15 +479,13 @@ are considered locked in on the `responder`'s side. From there, the
 constraints. A sketch is provided below:
 
         +-------+                               +-------+
-        |       |--(1)------ dyn_commit ------->|       |
+        |       |--(1)---- dyn_commit_sig ----->|       |
         |       |                               |       |
-        |   A   |--(2)------ commit_sig ------->|   B   |
+        |       |<-(2)---- revoke_and_ack ------|       |
+        |   A   |                               |   B   |
+        |       |<-(3)------ commit_sig --------|       |
         |       |                               |       |
-        |       |<-(3)---- revoke_and_ack ------|       |
-        |       |                               |       |
-        |   A   |<-(4)------ commit_sig --------|   B   |
-        |       |                               |       |
-        |       |--(5)---- revoke_and_ack ----->|       |
+        |       |--(4)---- revoke_and_ack ----->|       |
         +-------+                               +-------+
 
 #### Terminate Quiescence
