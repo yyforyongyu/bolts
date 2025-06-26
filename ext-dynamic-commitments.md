@@ -88,6 +88,7 @@ remaining after we filter out these values is thus:
 - `to_self_delay`
 - `max_accepted_htlcs`
 - `funding_pubkey`
+- `channel_flags`
 - `channel_type`
 
 The design presented here is intended to allow for arbitrary changes to these
@@ -107,8 +108,7 @@ However, there are exceptions to this protocol flow. Changing the funding pubkey
 and in certain cases, changing the channel type requires a funding output
 conversion. This proposal does not cover how to safely accomplish a funding
 output conversion and so for the purposes of the remainder of this document, it
-is considered prohibited. NOTE: follow-on documents will elaborate on how to
-execute changes that require funding output conversions.
+is considered prohibited.
 
 # Specification
 
@@ -117,6 +117,41 @@ During the proposal phase the only goal is to agree on a set of updates to the
 current channel state machine. Assuming an agreement can be reached, we will
 proceed to the execution phase. During the execution phase, we apply the updates
 to the channel state machine.
+
+The overall flow is shown in the following diagram:
+
+```
+    +-------+                                     +-------+
+    |       |--(1)--- stfu ---------------------->|       |
+    |       |(Proposes entering quiescence)       |       |
+    |       |                                     |       |
+    |       |<-(2)----------------------- stfu ---|       |
+    |       |       (Agrees; channel is now quiet)|       |
+    |       |                                     |       |
+    |       |--(3)--- dyn_propose --------------->|       |
+    |       |(Proposes new channel terms)         |       |
+    |       |                                     |       |
+    |       |<-(4)-------------------- dyn_ack ---|       |
+    |       |             (Agrees to terms w/ sig)|       |
+    |       |                                     |       |
+    |       |--(5)--- dyn_commit_sig ------------>|       |
+    |   A   |(Bundles proposal and sig, signs B's |   B   |
+    |       |new commitment)                      |       |
+    |       |                                     |       |
+    |       |<-(6)------------- revoke_and_ack ---|       |
+    |       |            (B revokes its old state)|       |
+    |       |                                     |       |
+    |       |<-(7)----------------- commit_sig ---|       |
+    |       |           (Signs A's new commitment)|       |
+    |       |                                     |       |
+    |       |--(8)--- revoke_and_ack ------------>|       |
+    |       |(A revokes its old state)            |       |
+    |       |                                     |       |
+    |       |  (Channel operates with new terms)  |       |
+    +-------+                                     +-------+
+```
+
+
 
 ## Proposal Phase
 
@@ -128,7 +163,8 @@ state.
 
 In every dynamic commitment negotiation, there are two roles: the `initiator`
 and the `responder`. It is necessary for both nodes to agree on which node is
-the `initiator` and which node is the `responder`.
+the `initiator` and which node is the `responder`, which is determined during
+the quiescence negotiation.
 
 ### Negotiation TLVs
 
@@ -165,9 +201,17 @@ and are common to all messages in the negotiation phase.
   data:
     * [`u16`:`senders_max_accepted_htlcs`]
 
-#### channel_type
+#### channel_flags
 
 - type: 10
+
+  data:
+
+  - [`byte`: `channel_flags`]
+
+#### channel_type
+
+- type: 12
   data:
     * [`...*byte`:`channel_type`]
 
@@ -212,9 +256,12 @@ sent by the `initiator`.
     1. type: 8 (`max_accepted_htlcs`)
     2. data:
         * [`u16`:`senders_max_accepted_htlcs`]
-    1. type: 10 (`channel_type`)
+    1. type: 10 (`channel_flags`)
     2. data:
-        * [`...*byte`:`channel_type`]
+         - [`byte`: `channel_flags`]
+    1. type: 12 (`channel_type`)
+    2. data:
+         * [`...*byte`:`channel_type`]
 
 ##### Requirements
 
@@ -233,6 +280,9 @@ The sending node:
     feature bit.
 
 The receiving node:
+  - if the channel is not quiescent:
+    - SHOULD send an `error` and close the connection.
+
   - if `channel_id` does not match an existing channel it has with the sender:
     - SHOULD send an `error` and close the connection.
   - MUST respond with either a `dyn_ack` or `dyn_reject`.
@@ -242,10 +292,6 @@ The receiving node:
   - if the TLV parameters of the `dyn_propose` are NOT acceptable and the
     receiver refuses to execute those parameter changes:
     - MUST respond with `dyn_reject`.
-
-_NOTE FOR REVIEWERS_: These messages all interact with each other, so feedback
-is welcome for how to restructure this section so that the invariants it
-prescribes are found in the most intuitive place.
 
 ##### Rationale
 
@@ -283,7 +329,7 @@ The receiving node:
   - if `channel_id` does not match an existing channel it has with the peer:
     - MUST send an `error` and close the connection.
   - if there isn't an outstanding `dyn_propose` it has sent:
-    - MUST send an `error` and fail the channel.
+    - MUST send an `error` and close the connection.
   - MUST verify the `signature` is valid for the same set of parameters proposed
     and signed by the channel peer's node identity private key.
   - MUST respond with a `dyn_commit` message.
@@ -330,7 +376,7 @@ The receiving node:
   - if `channel_id` does not match an existing channel it has with the peer
     - MUST close the connection
   - if there isn't an outstanding `dyn_propose` it has sent
-    - MUST send an `error` and fail the channel
+    - MUST send an `error` and close the connection.
   - MUST forget its last sent `dyn_propose` parameters.
   - if the `update_rejections` is a zero value
     - SHOULD NOT re-attempt another dynamic commitment negotiation for the
@@ -352,7 +398,7 @@ to an agreement on a proposal that will work. By sending back a zero value for
 commitment negotiation forward at all and further negotiation should not be
 attempted.
 
-#### `dyn_commit`
+#### `dyn_commit_sig`
 
 This message is sent after receiving a `dyn_ack` to unify the parameters
 and the signature into a single message.
@@ -360,6 +406,7 @@ and the signature into a single message.
 1. type: 117
 2. data:
    * [`32*byte`:`channel_id`]
+   * [`signature`: `commit_signature`]
    * [`signature`:`dyn_ack_signature`]
    * [`dyn_propose_tlvs`:`tlvs`]
 
@@ -367,20 +414,25 @@ and the signature into a single message.
 
 The sending node:
   - MUST set `channel_id` to a valid channel id that it has with a peer.
-  - MUST set `signature` to a valid signature that matches the
+  - MUST set `commit_signature` that signs the responder's next commitment.
+    Essentially this is a `commit_sig` with zero HTLCs.
+  - MUST set `dyn_ack_signature` to a valid signature that matches the
     `dyn_propose_tlvs` and the receiver's node identity private key.
     message.
-  - MUST NOT send `dyn_commit` with a signature that is not valid for the
+  - MUST NOT send `dyn_commit_sig` with a signature that is not valid for the
     next commitment number that the receiving node expects to receive.
-  - MAY send `dyn_commit` _even if_ the channel is NOT quiescent.
+  - MAY send `dyn_commit_sig` _even if_ the channel is NOT quiescent.
   - MUST proceed to the Execution Phase.
 
 The receiving node:
-  - MUST validate that the `signature` was previously signed by its own node
-    identity pubkey for the next commitment number it expects to receive for
-    the `channel_id` specified.
-  - MUST consider this message an "update" for the purposes of retransmission
-    as well as allowing enabling the receipt of a `commitment_signed` message.
+  - if `commit_signature` is not valid for its local commitment transaction OR
+    non-compliant with LOW-S-standard rule.
+    - MUST send a `warning` and close the connection, or send an `error` and
+      fail the channel.
+  - MUST validate that the `dyn_ack_signature` was previously signed by its own
+    node identity pubkey for the next commitment number it expects to receive
+    for the `channel_id` specified.
+  - MUST consider this message an "update" for the purposes of retransmission.
   - MUST proceed to the Execution Phase.
 
 ##### Rationale
@@ -391,6 +443,14 @@ discrepancies in channel state. With this message the effects of the Dynamic
 Commitment negotiation can be reapplied without retransmitting the negotiation
 messages themselves.
 
+When the channel is quiescent, there are no HTLCs to be signed. Therefore, the
+`commit_sig` is wrapped within `dyn_commit_sig`, appearing as a single
+`commit_signature`. This bundling eliminates the need for a separate
+`commit_sig` message, reducing communication rounds. It also prevents a
+potential race condition where the responder might receive `dyn_commit` and
+`commit_sig` almost simultaneously, which could cause issues if `dyn_commit`
+isn't processed first.
+
 ## Reestablish
 
 The channel reestablish that needs to include a Dynamic Commitment upgrade
@@ -399,10 +459,11 @@ identically.
 
 ### Requirements
 
-If a node has previously sent a `dyn_commit` message that contains a
+If a node has previously sent a `dyn_commit_sig` message that contains a
 signature bound to the commitment number that its channel peer specified in the
 `channel_reestablish` message:
-  - MUST retransmit `dyn_commit`
+
+  - MUST retransmit `dyn_commit_sig`
   - MUST NOT retransmit `dyn_propose`
   - MUST proceed to Execution Phase
 
@@ -412,7 +473,7 @@ During the reestablish process we explicitly specify the next commitment
 numbers we expect to receive. Since the new parameter changes are locked in
 by an exchange of `commitment_signed` messages, if our channel peer tells us
 that the next commit number it expects is the same one as the commit number
-bound in the signature in `dyn_commit` we need to reissue that commitment
+bound in the signature in `dyn_commit_sig` we need to reissue that commitment
 as well as all of the updates that commitment includes.
 
 As a side note, since we establish quiescence prior to Dynamic Commitment
@@ -430,20 +491,27 @@ are considered locked in on the `responder`'s side. From there, the
 constraints. A sketch is provided below:
 
         +-------+                               +-------+
-        |       |--(1)------ dyn_commit ------->|       |
+        |       |--(1)---- dyn_commit_sig ----->|       |
         |       |                               |       |
-        |   A   |--(2)------ commit_sig ------->|   B   |
+        |       |<-(2)---- revoke_and_ack ------|       |
+        |   A   |                               |   B   |
+        |       |<-(3)------ commit_sig --------|       |
         |       |                               |       |
-        |       |<-(3)---- revoke_and_ack ------|       |
+        |       |--(4)---- revoke_and_ack ----->|       |
         +-------+                               +-------+
 
-At this point the channel is no longer considered quiescent.
+#### Terminate Quiescence
 
-_NOTE FOR REVIEWERS_: Should we require that the `responder` immediately issues
-a `commitment_signed` of its own? As far as I can tell this doesn't accomplish
-anything except in the case where the `initiator` requests a change to its
-`dust_limit` which would give it _immediate_ (as opposed to _eventual_) access
-to a commitment transaction that abided by the new limit.
+A channel is no longer considered quiescent once a `revoke_and_ack` message is
+involved. Specifically, the initiator considers the channel active upon sending
+`revoke_and_ack`, while the responder considers it active upon receiving the
+message.
+
+A split view on the quiescence state is possible. For example, the initiator
+might immediately send an `update_add_htlc` after resuming channel operations,
+even while the responder is still processing the `revoke_and_ack`. This is
+acceptable, provided the responder caches the `update_add_htlc` and processes
+it later.
 
 ## Appendix A: `dyn_ack` signature definition
 
