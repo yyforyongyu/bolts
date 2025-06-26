@@ -270,6 +270,9 @@ The sending node:
     feature bit.
 
 The receiving node:
+  - if the channel is not quiescent:
+    - SHOULD send an `error` and close the connection.
+
   - if `channel_id` does not match an existing channel it has with the sender:
     - SHOULD send an `error` and close the connection.
   - MUST respond with either a `dyn_ack` or `dyn_reject`.
@@ -316,7 +319,7 @@ The receiving node:
   - if `channel_id` does not match an existing channel it has with the peer:
     - MUST send an `error` and close the connection.
   - if there isn't an outstanding `dyn_propose` it has sent:
-    - MUST send an `error` and fail the channel.
+    - MUST send an `error` and close the connection.
   - MUST verify the `signature` is valid for the same set of parameters proposed
     and signed by the channel peer's node identity private key.
   - MUST respond with a `dyn_commit` message.
@@ -363,7 +366,7 @@ The receiving node:
   - if `channel_id` does not match an existing channel it has with the peer
     - MUST close the connection
   - if there isn't an outstanding `dyn_propose` it has sent
-    - MUST send an `error` and fail the channel
+    - MUST send an `error` and close the connection.
   - MUST forget its last sent `dyn_propose` parameters.
   - if the `update_rejections` is a zero value
     - SHOULD NOT re-attempt another dynamic commitment negotiation for the
