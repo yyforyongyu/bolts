@@ -117,6 +117,43 @@ current channel state machine. Assuming an agreement can be reached, we will
 proceed to the execution phase. During the execution phase, we apply the updates
 to the channel state machine.
 
+The overall flow is shown in the following diagram:
+
+```
+    +-------+                                     +-------+
+    |       |--(1)--- stfu ---------------------->|       |
+    |       |(Proposes entering quiescence)       |       |
+    |       |                                     |       |
+    |       |<-(2)----------------------- stfu ---|       |
+    |       |       (Agrees; channel is now quiet)|       |
+    |       |                                     |       |
+    |       |--(3)--- dyn_propose --------------->|       |
+    |       |(Proposes new channel terms)         |       |
+    |       |                                     |       |
+    |       |<-(4)-------------------- dyn_ack ---|       |
+    |       |       (Agrees to terms w/ signature)|       |
+    |       |                                     |       |
+    |       |--(5)--- dyn_commit ---------------->|       |
+    |   A   |(Bundles proposal and signature)     |   B   |
+    |       |                                     |       |
+    |       |--(6)--- commit_sig ---------------->|       |
+    |       |(Signs B's new commitment)           |       |
+    |       |                                     |       |
+    |       |<-(7)------------- revoke_and_ack ---|       |
+    |       |            (B revokes its old state)|       |
+    |       |                                     |       |
+    |       |<-(8)----------------- commit_sig ---|       |
+    |       |           (Signs A's new commitment)|       |
+    |       |                                     |       |
+    |       |--(9)--- revoke_and_ack ------------>|       |
+    |       |(A revokes its old state)            |       |
+    |       |                                     |       |
+    |       |  (Channel operates with new terms)  |       |
+    +-------+                                     +-------+
+```
+
+
+
 ## Proposal Phase
 
 As a prerequisite to the proposal phase of a Dynamic Commitment negotiation, the
@@ -431,6 +468,10 @@ constraints. A sketch is provided below:
         |   A   |--(2)------ commit_sig ------->|   B   |
         |       |                               |       |
         |       |<-(3)---- revoke_and_ack ------|       |
+        |       |                               |       |
+        |   A   |<-(4)------ commit_sig --------|   B   |
+        |       |                               |       |
+        |       |--(5)---- revoke_and_ack ----->|       |
         +-------+                               +-------+
 
 At this point the channel is no longer considered quiescent.
