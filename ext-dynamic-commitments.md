@@ -474,7 +474,18 @@ constraints. A sketch is provided below:
         |       |--(5)---- revoke_and_ack ----->|       |
         +-------+                               +-------+
 
-At this point the channel is no longer considered quiescent.
+#### Terminate Quiescence
+
+A channel is no longer considered quiescent once a `revoke_and_ack` message is
+involved. Specifically, the initiator considers the channel active upon sending
+`revoke_and_ack`, while the responder considers it active upon receiving the
+message.
+
+A split view on the quiescence state is possible. For example, the initiator
+might immediately send an `update_add_htlc` after resuming channel operations,
+even while the responder is still processing the `revoke_and_ack`. This is
+acceptable, provided the responder caches the `update_add_htlc` and processes
+it later.
 
 ## Appendix A: `dyn_ack` signature definition
 
