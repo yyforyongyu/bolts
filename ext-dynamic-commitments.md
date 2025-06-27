@@ -89,10 +89,16 @@ remaining after we filter out these values is thus:
 - `max_accepted_htlcs`
 - `funding_pubkey`
 - `channel_flags`
-- `channel_type`
+- channel_type<sup>*</sup>
 
 The design presented here is intended to allow for arbitrary changes to these
 values that currently have no facilities for change in any other way.
+
+<sup>*</sup>`channel_type` can be updated using Dynamic Commitments only if the
+funding output scripts are identical between the `channel_type` prior to the
+change and following it.
+
+TODO: list allowed channel_type conversions here.
 
 ## Design Overview
 
