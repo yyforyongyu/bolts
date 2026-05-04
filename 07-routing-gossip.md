@@ -210,6 +210,10 @@ The origin node:
 The receiving node:
   - MUST verify the integrity AND authenticity of the message by verifying the
   signatures.
+  - if `node_id_1` is not lexicographically less than `node_id_2`:
+    - SHOULD send a `warning`.
+    - MAY close the connection.
+    - MUST ignore the message.
   - if there is an unknown even bit in the `features` field:
     - MUST NOT attempt to route messages through the channel.
   - if the `short_channel_id`'s output does NOT correspond to a P2WSH (using
