@@ -57,6 +57,7 @@ The Context column decodes as follows:
 | 50/51 | `option_zeroconf`                 | Understands zeroconf channel types                        | INT      | `option_scid_alias`         | [BOLT #2][bolt02-channel-ready]                                       |
 | 60/61 | `option_simple_close`             | Simplified closing negotiation                            | IN       | `option_shutdown_anysegwit` | [BOLT #2][bolt02-simple-close]                                        |
 | 62/63 | `option_splice`                   | Allows replacing the funding transaction with a new one   | IN       |                             | [BOLT #2](02-peer-protocol.md#channel-splicing)                       |
+| 64/65 | `option_dynamic_commitments`      | Allows updating channel parameters without a new funding tx | IN       | `option_quiesce`            | [Dynamic Commitments][ext-dynamic-commitments]                        |
 
 ## Requirements
 
@@ -113,4 +114,5 @@ This work is licensed under a [Creative Commons Attribution 4.0 International Li
 [bolt04-mpp]: 04-onion-routing.md#basic-multi-part-payments
 [bolt04-route-blinding]: 04-onion-routing.md#route-blinding
 [bolt04-attributable-errors]: 04-onion-routing.md
+[ext-dynamic-commitments]: ext-dynamic-commitments.md
 [ml-sighash-single-harmful]: https://lists.linuxfoundation.org/pipermail/lightning-dev/2020-September/002796.html
